@@ -1,4 +1,4 @@
-# HotkeyNotes
+# notesCapture
 
 A lightweight macOS quick-capture note tool triggered by `Option + Space`.
 
@@ -32,10 +32,11 @@ A quick thought goes here
 ## Project structure
 
 ```txt
-HotkeyNotes/
+notesCapture/
 ├── hammerspoon/
 │   └── init.lua
 ├── quicknote.swift
+├── LICENSE
 └── README.md
 ```
 
@@ -57,14 +58,14 @@ brew install --cask hammerspoon
 Create or update `~/.hammerspoon/init.lua` with:
 
 ```lua
-dofile(os.getenv("HOME") .. "/Desktop/Projects/HotkeyNotes/hammerspoon/init.lua")
+dofile(os.getenv("HOME") .. "/Desktop/Projects/notesCapture/hammerspoon/init.lua")
 ```
 
 ### 3. Build the helper
 
 ```bash
-mkdir -p ~/Desktop/Projects/HotkeyNotes/bin
-swiftc ~/Desktop/Projects/HotkeyNotes/quicknote.swift -o ~/Desktop/Projects/HotkeyNotes/bin/hotkey-notes
+mkdir -p ~/Desktop/Projects/notesCapture/bin
+swiftc ~/Desktop/Projects/notesCapture/quicknote.swift -o ~/Desktop/Projects/notesCapture/bin/hotkey-notes
 ```
 
 ### 4. Launch Hammerspoon
@@ -89,7 +90,7 @@ macOS may ask you to allow Hammerspoon in:
 Notes are saved to:
 
 ```txt
-~/Desktop/Projects/HotkeyNotes/notes.txt
+~/Desktop/Projects/notesCapture/notes.txt
 ```
 
 ## How it works
@@ -102,12 +103,11 @@ Notes are saved to:
 ## Rebuild after code changes
 
 ```bash
-swiftc ~/Desktop/Projects/HotkeyNotes/quicknote.swift -o ~/Desktop/Projects/HotkeyNotes/bin/hotkey-notes
+swiftc ~/Desktop/Projects/notesCapture/quicknote.swift -o ~/Desktop/Projects/notesCapture/bin/hotkey-notes
 killall Hammerspoon || true
 open -a Hammerspoon
 ```
 
-## Notes
+## License
 
-This repo is intentionally minimal and local-first.
-It is designed for fast capture, not full note management.
+MIT

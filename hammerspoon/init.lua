@@ -1,4 +1,4 @@
-local projectDir = os.getenv("HOME") .. "/Desktop/Projects/HotkeyNotes"
+local projectDir = os.getenv("HOME") .. "/Desktop/Projects/notesCapture"
 local binary = projectDir .. "/bin/hotkey-notes"
 local notesFile = projectDir .. "/notes.txt"
 
@@ -17,7 +17,7 @@ local function openQuickNote()
 
     if exitCode ~= 0 and exitCode ~= 15 then
       hs.notify.new({
-        title = "HotkeyNotes",
+        title = "notesCapture",
         informativeText = (stdErr ~= "" and stdErr) or "Quick note window failed to open"
       }):send()
     end
@@ -25,7 +25,7 @@ local function openQuickNote()
 
   if not quickNoteTask then
     hs.notify.new({
-      title = "HotkeyNotes",
+      title = "notesCapture",
       informativeText = "Could not launch quick note helper"
     }):send()
     return
