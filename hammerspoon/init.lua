@@ -1,4 +1,8 @@
-local projectDir = os.getenv("HOME") .. "/Desktop/Projects/notesCapture"
+local source = debug.getinfo(1, "S").source
+local scriptPath = source:sub(1, 1) == "@" and source:sub(2) or source
+local scriptDir = scriptPath:match("(.*/)" ) or "./"
+local projectDir = scriptDir:gsub("/$", ""):gsub("/hammerspoon$", "")
+
 local binary = projectDir .. "/bin/hotkey-notes"
 local notesFile = projectDir .. "/notes.txt"
 
