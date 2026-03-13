@@ -46,10 +46,18 @@ while IFS= read -r file; do
     prefix="${base%.txt}"
   fi
 
+  text="$(python3 - "$file" <<'PY'
+from pathlib import Path
+import sys
+print(Path(sys.argv[1]).read_text(encoding='utf-8').strip())
+PY
+)"
+  if [[ -z "$text" ]]; then
+    continue
+  fi
+
   display_ts="$(echo "$prefix" | sed -E 's/^([0-9]{4}-[0-9]{2}-[0-9]{2})_([0-9]{2})-([0-9]{2})-([0-9]{2})$/\1 \2:\3:\4/')"
-  printf '[%s]\n' "$display_ts" >> "$TMP_FILE"
-  cat "$file" >> "$TMP_FILE"
-  printf '\n\n' >> "$TMP_FILE"
+  printf '[%s]\n%s\n\n' "$display_ts" "$text" >> "$TMP_FILE"
 done < "$ENTRY_LIST"
 
 mv "$TMP_FILE" "$NOTES_FILE"

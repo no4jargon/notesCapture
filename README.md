@@ -31,20 +31,24 @@ So the architecture uses boring primitives:
 The most important design choice is this:
 
 - **`notes.txt` is a generated view**
-- **canonical memory lives in immutable entry files**
+- **canonical memory should be append-only**
+- **producers should be write-only capture modules**
 
-That makes it easier to support Mac, iPhone, Dropbox, and later Windows and Android without making one shared text file the fragile write target.
+Today, canonical memory lives in immutable entry files.
+The long-term target is a transport-agnostic append-only event journal.
+
+That makes it easier to support Mac, iPhone, Dropbox, and later Windows, Android, web, browsers, watches, sensors, and agentic systems without making one shared text file the fragile write target.
 
 ## Current architecture
 
-`notesCapture` now has three layers:
+`notesCapture` currently has three working layers:
 
 1. **capture clients**
    - Mac hotkey popup
    - iPhone Shortcut via Dropbox inbox
-   - future Android / Windows clients can use the same contract
+   - future Android / Windows clients can use the same transitional contract
 
-2. **canonical storage**
+2. **current canonical storage**
    - one note = one immutable text file in `entries/`
 
 3. **materialized view**
@@ -54,6 +58,19 @@ There is also an `inbox/` folder for lightweight mobile capture:
 - any device can drop plain text files into `inbox/`
 - the Mac importer converts them into canonical entries
 - `notes.txt` is then regenerated automatically
+
+## Target architecture
+
+The long-term target is:
+
+- many write-only producers
+- transport-specific ingress adapters
+- one append-only canonical journal
+- generated views and indexes on top
+
+That future design is documented here:
+- `docs/architecture-v2.md`
+- `docs/capture-event-v1.md`
 
 ## Features
 
@@ -92,6 +109,22 @@ git clone git@github.com:no4jargon/notesCapture.git
 cd notesCapture
 ./setup.sh
 ```
+
+## Development workflow
+
+This repo now follows a PR-first workflow.
+
+Before opening or merging a PR, run:
+
+```bash
+./tests/run_all.sh
+```
+
+The same test suite runs in GitHub Actions on every PR.
+
+See also:
+- `CONTRIBUTING.md`
+- `.github/workflows/pr-checks.yml`
 
 ## Data layout
 
@@ -164,9 +197,9 @@ This keeps the architecture open for:
 - Android automation tools
 - future HTTP/API ingestion
 
-## Cross-platform contract
+## Transitional cross-platform contract
 
-The stable contract is intentionally tiny:
+The current working contract is intentionally tiny:
 
 ### Desktop direct-write contract
 A client may write one plain text file per note into:
@@ -182,9 +215,17 @@ A client may drop one plain text file per note into:
 inbox/
 ```
 
-As long as a client can create a text file in the shared folder, it can participate in the system.
+As long as a client can create a text file in the shared folder, it can participate in the current system.
 
-That is what makes this architecture extensible.
+## Future producer contract
+
+The long-term producer contract is different:
+- producers emit `capture-event-v1` payloads
+- producers append into ingress only
+- producers do not know about Dropbox, `entries/`, or `notes.txt`
+
+That contract is specified in:
+- `docs/capture-event-v1.md`
 
 ## Example generated timeline
 
@@ -201,7 +242,11 @@ A quick thought goes here
 
 ```txt
 notesCapture/
+├── .github/
 ├── config/
+├── docs/
+│   ├── architecture-v2.md
+│   └── capture-event-v1.md
 ├── hammerspoon/
 │   └── init.lua
 ├── mobile/
@@ -210,6 +255,10 @@ notesCapture/
 ├── scripts/
 │   ├── materialize_notes.sh
 │   └── process_inbox.sh
+├── tests/
+│   ├── run_all.sh
+│   └── test_notescapture.py
+├── CONTRIBUTING.md
 ├── quicknote.swift
 ├── setup.sh
 ├── LICENSE
