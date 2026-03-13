@@ -11,6 +11,9 @@ MATERIALIZE = REPO_ROOT / "scripts" / "materialize_notes.sh"
 PROCESS_INBOX = REPO_ROOT / "scripts" / "process_inbox.sh"
 IMPORT_LEGACY = REPO_ROOT / "scripts" / "import_legacy_notes.py"
 QUICKNOTE = REPO_ROOT / "quicknote.swift"
+SETUP = REPO_ROOT / "setup.sh"
+IOS_README = REPO_ROOT / "mobile" / "ios" / "README.md"
+README = REPO_ROOT / "README.md"
 
 
 class NotesCaptureTestCase(unittest.TestCase):
@@ -229,6 +232,22 @@ class NotesCaptureTestCase(unittest.TestCase):
         self.assertIn('appendingPathComponent("local", isDirectory: true)', source)
         self.assertNotIn('try materializeNotes()', source)
         self.assertNotIn('appendingPathComponent("entries", isDirectory: true)', source)
+
+    def test_setup_and_docs_prefer_dropbox_ingress_over_legacy_inbox(self):
+        setup_source = SETUP.read_text(encoding="utf-8")
+        ios_readme = IOS_README.read_text(encoding="utf-8")
+        readme = README.read_text(encoding="utf-8")
+
+        self.assertIn('/${dropbox_relative}/ingress/dropbox', setup_source)
+        self.assertNotIn('/${dropbox_relative}/inbox', setup_source)
+        self.assertIn('phone writes plain text files into ingress/dropbox/', setup_source)
+
+        self.assertIn('ingress/dropbox/', ios_readme)
+        self.assertIn('inbox/', ios_readme)
+        self.assertIn('legacy', ios_readme.lower())
+
+        self.assertIn('ingress/dropbox/', readme)
+        self.assertIn('legacy', readme.lower())
 
     @unittest.skipUnless(shutil.which("swiftc"), "swiftc not available")
     def test_quicknote_swift_typechecks(self):
