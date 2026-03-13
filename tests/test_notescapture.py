@@ -33,6 +33,8 @@ class NotesCaptureTestCase(unittest.TestCase):
         data_dir = root / "data"
         (data_dir / "entries").mkdir(parents=True, exist_ok=True)
         (data_dir / "inbox").mkdir(parents=True, exist_ok=True)
+        (data_dir / "ingress" / "dropbox").mkdir(parents=True, exist_ok=True)
+        (data_dir / "ingress" / "local").mkdir(parents=True, exist_ok=True)
         (data_dir / "legacy").mkdir(parents=True, exist_ok=True)
         return data_dir
 
@@ -74,7 +76,7 @@ class NotesCaptureTestCase(unittest.TestCase):
             self.assertTrue(notes_file.exists())
             self.assertEqual(notes_file.read_text(encoding="utf-8"), "")
 
-    def test_process_inbox_imports_files_archives_originals_and_updates_notes(self):
+    def test_process_inbox_imports_legacy_inbox_files_archives_originals_and_updates_notes(self):
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = self.make_data_dir(Path(tmp))
             inbox = data_dir / "inbox"
@@ -108,6 +110,50 @@ class NotesCaptureTestCase(unittest.TestCase):
             notes = (data_dir / "notes.txt").read_text(encoding="utf-8")
             self.assertIn("[2026-03-13 17:24:25]\nHello from iPhone\nsecond line\n", notes)
             self.assertIn("[2026-03-13 17:25:30]\nHello from Android\n", notes)
+
+    def test_process_inbox_imports_dropbox_ingress_files_without_using_legacy_inbox(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = self.make_data_dir(Path(tmp))
+            ingress = data_dir / "ingress" / "dropbox"
+
+            note_file = ingress / "iphone-capture.txt"
+            note_file.write_text("Hello from ingress\n", encoding="utf-8")
+            self.run_cmd("touch", "-t", "202603131726.45", str(note_file))
+
+            self.run_cmd("bash", str(PROCESS_INBOX), str(data_dir))
+
+            imported_entries = sorted((data_dir / "entries").rglob("*.txt"))
+            self.assertEqual(len(imported_entries), 1)
+            self.assertTrue(
+                imported_entries[0].name.startswith("2026-03-13_17-26-45--mobile-capture--dropbox-ingress--")
+            )
+            self.assertEqual(imported_entries[0].read_text(encoding="utf-8"), "Hello from ingress\n")
+
+            self.assertTrue((ingress / "archive" / "iphone-capture.txt.imported").exists())
+            notes = (data_dir / "notes.txt").read_text(encoding="utf-8")
+            self.assertEqual(notes, "[2026-03-13 17:26:45]\nHello from ingress\n\n")
+
+    def test_process_inbox_imports_local_ingress_files_for_mac_capture_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = self.make_data_dir(Path(tmp))
+            ingress = data_dir / "ingress" / "local"
+
+            note_file = ingress / "mac-capture.txt"
+            note_file.write_text("Hello from Mac ingress\n", encoding="utf-8")
+            self.run_cmd("touch", "-t", "202603131730.10", str(note_file))
+
+            self.run_cmd("bash", str(PROCESS_INBOX), str(data_dir))
+
+            imported_entries = sorted((data_dir / "entries").rglob("*.txt"))
+            self.assertEqual(len(imported_entries), 1)
+            self.assertTrue(
+                imported_entries[0].name.startswith("2026-03-13_17-30-10--mac-hotkey--local-ingress--")
+            )
+            self.assertEqual(imported_entries[0].read_text(encoding="utf-8"), "Hello from Mac ingress\n")
+            self.assertTrue((ingress / "archive" / "mac-capture.txt.imported").exists())
+
+            notes = (data_dir / "notes.txt").read_text(encoding="utf-8")
+            self.assertEqual(notes, "[2026-03-13 17:30:10]\nHello from Mac ingress\n\n")
 
     def test_process_inbox_moves_empty_files_to_archive_without_entry(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -176,6 +222,13 @@ class NotesCaptureTestCase(unittest.TestCase):
             imported_entries = sorted((data_dir / "entries").rglob("*.txt"))
             self.assertEqual(len(imported_entries), 1)
             self.assertIn("Imported 0 entries", second.stdout)
+
+    def test_quicknote_source_targets_local_ingress_not_entries(self):
+        source = QUICKNOTE.read_text(encoding="utf-8")
+        self.assertIn('appendingPathComponent("ingress", isDirectory: true)', source)
+        self.assertIn('appendingPathComponent("local", isDirectory: true)', source)
+        self.assertNotIn('try materializeNotes()', source)
+        self.assertNotIn('appendingPathComponent("entries", isDirectory: true)', source)
 
     @unittest.skipUnless(shutil.which("swiftc"), "swiftc not available")
     def test_quicknote_swift_typechecks(self):

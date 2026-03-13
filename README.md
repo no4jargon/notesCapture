@@ -54,9 +54,10 @@ That makes it easier to support Mac, iPhone, Dropbox, and later Windows, Android
 3. **materialized view**
    - `notes.txt` is rebuilt from canonical entries
 
-There is also an `inbox/` folder for lightweight mobile capture:
-- any device can drop plain text files into `inbox/`
-- the Mac importer converts them into canonical entries
+There is also a transitional raw-ingress layer:
+- `inbox/` is still supported as the legacy mobile drop location
+- `ingress/` is now reserved as the future transport-specific append layer
+- the Mac importer converts raw submissions into canonical entries
 - `notes.txt` is then regenerated automatically
 
 ## Target architecture
@@ -133,6 +134,9 @@ By default, setup uses Dropbox if available:
 ```txt
 <Dropbox>/notesCapture-data/
 ├── entries/
+├── ingress/
+│   ├── dropbox/
+│   └── local/
 ├── inbox/
 ├── legacy/
 └── notes.txt
@@ -146,8 +150,9 @@ If Dropbox is not available, setup falls back to:
 
 ### What each folder means
 
-- `entries/` → canonical immutable note files
-- `inbox/` → lightweight capture dropbox for phone and future clients
+- `entries/` → current canonical immutable note files
+- `ingress/` → transport-specific staging area for future append-only producers
+- `inbox/` → legacy lightweight capture dropbox kept for backward compatibility
 - `notes.txt` → generated readable timeline
 - `legacy/` → archived pre-entry notes if setup finds an older `notes.txt`
 
