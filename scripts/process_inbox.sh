@@ -17,43 +17,56 @@ if [[ -z "$DATA_DIR" ]]; then
   exit 1
 fi
 
-INBOX_DIR="$DATA_DIR/inbox"
-ARCHIVE_DIR="$INBOX_DIR/archive"
 ENTRIES_DIR="$DATA_DIR/entries"
+INGRESS_DIR="$DATA_DIR/ingress"
+LEGACY_INBOX_DIR="$DATA_DIR/inbox"
+DROPBOX_INGRESS_DIR="$INGRESS_DIR/dropbox"
+LOCAL_INGRESS_DIR="$INGRESS_DIR/local"
+TMP_LIST="$DATA_DIR/.notesCapture-inbox-list.tmp"
 
-mkdir -p "$INBOX_DIR" "$ARCHIVE_DIR" "$ENTRIES_DIR"
-
-find "$INBOX_DIR" -maxdepth 1 -type f \( -name '*.txt' -o -name '*.md' \) | sort > "$DATA_DIR/.notesCapture-inbox-list.tmp" || true
-INBOX_LIST="$DATA_DIR/.notesCapture-inbox-list.tmp"
+mkdir -p "$ENTRIES_DIR" "$LEGACY_INBOX_DIR" "$DROPBOX_INGRESS_DIR" "$LOCAL_INGRESS_DIR"
 
 imported_any=0
-while IFS= read -r file; do
-  [[ -n "$file" ]] || continue
 
-  if ! grep -q '[^[:space:]]' "$file"; then
-    mv "$file" "$ARCHIVE_DIR/$(basename "$file").empty"
-    continue
-  fi
+import_from_source_dir() {
+  local source_dir="$1"
+  local source_name="$2"
+  local device="$3"
+  local archive_dir="$source_dir/archive"
 
-  mtime="$(stat -f '%m' "$file")"
-  timestamp="$(date -r "$mtime" '+%Y-%m-%d_%H-%M-%S')"
-  year="$(date -r "$mtime" '+%Y')"
-  month="$(date -r "$mtime" '+%m')"
-  day="$(date -r "$mtime" '+%d')"
-  device="dropbox-inbox"
-  source_name="mobile-capture"
-  unique_id="$(uuidgen | tr '[:upper:]' '[:lower:]' | cut -c1-8)"
+  mkdir -p "$source_dir" "$archive_dir"
+  find "$source_dir" -maxdepth 1 -type f \( -name '*.txt' -o -name '*.md' \) | sort > "$TMP_LIST" || true
 
-  entry_dir="$ENTRIES_DIR/$year/$month/$day"
-  mkdir -p "$entry_dir"
-  entry_file="$entry_dir/$timestamp--$source_name--$device--$unique_id.txt"
+  while IFS= read -r file; do
+    [[ -n "$file" ]] || continue
 
-  cp "$file" "$entry_file"
-  mv "$file" "$ARCHIVE_DIR/$(basename "$file").imported"
-  imported_any=1
-done < "$INBOX_LIST"
+    if ! grep -q '[^[:space:]]' "$file"; then
+      mv "$file" "$archive_dir/$(basename "$file").empty"
+      continue
+    fi
 
-rm -f "$INBOX_LIST"
+    local mtime timestamp year month day unique_id entry_dir entry_file
+    mtime="$(stat -f '%m' "$file")"
+    timestamp="$(date -r "$mtime" '+%Y-%m-%d_%H-%M-%S')"
+    year="$(date -r "$mtime" '+%Y')"
+    month="$(date -r "$mtime" '+%m')"
+    day="$(date -r "$mtime" '+%d')"
+    unique_id="$(uuidgen | tr '[:upper:]' '[:lower:]' | cut -c1-8)"
+
+    entry_dir="$ENTRIES_DIR/$year/$month/$day"
+    mkdir -p "$entry_dir"
+    entry_file="$entry_dir/$timestamp--$source_name--$device--$unique_id.txt"
+
+    cp "$file" "$entry_file"
+    mv "$file" "$archive_dir/$(basename "$file").imported"
+    imported_any=1
+  done < "$TMP_LIST"
+}
+
+import_from_source_dir "$LEGACY_INBOX_DIR" "mobile-capture" "dropbox-inbox"
+import_from_source_dir "$DROPBOX_INGRESS_DIR" "mobile-capture" "dropbox-ingress"
+
+rm -f "$TMP_LIST"
 
 if [[ "$imported_any" -eq 1 || ! -f "$DATA_DIR/notes.txt" ]]; then
   "$MATERIALIZE_SCRIPT" "$DATA_DIR"
