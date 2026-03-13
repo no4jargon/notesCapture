@@ -1,82 +1,89 @@
 # notesCapture
 
-A lightweight macOS quick-capture note tool triggered by `Option + Space`.
+A lightweight, local-first capture tool for a much larger long-term personal system.
 
-It uses:
-- **Hammerspoon** for the global hotkey
-- a tiny **Swift/AppKit helper** for the popup note window
+`notesCapture` is not meant to be just another notes app. It is a gateway module into a decade-scale, agentic personal architecture built around a simple idea:
 
-## Why this exists
+- capture first
+- structure later
+- keep the raw record durable
+- let agents build derived views on top
 
-This tool is not meant to be just another note app.
-It is a **gateway module** toward a much larger, long-term, agentic personal system designed to help with:
-
-- high productivity
-- health and fitness
-- conscious life reflection
-- deeper friendships
-- thoughtful digital presence
-
-The core philosophy is simple:
-
-- **capture first, structure later**
-- keep one **append-only log** of raw thoughts
-- let agents create **derived views** instead of editing the raw record
-- use **boring, durable primitives** that can survive for a decade: plain text, local files, simple scripts, replaceable agents
-
-The long-term idea is that a single stream of timestamped notes can become the memory layer for many future tools:
-
-- task extraction
-- weekly reflection
-- learning summaries
+The long-term goal is to support:
+- productivity
+- reflection
+- health pattern awareness
 - relationship memory
-- social writing prompts
-- health and behavior pattern detection
+- future writing and social expression
 
-In that architecture, `notesCapture` is the simplest possible entry point: a low-friction way to get thoughts out of your head and into a durable log.
+## Core philosophy
 
-This project is inspired by ideas such as:
+The system should survive tool churn, platform churn, and life changes.
+So the architecture uses boring primitives:
 
-- capture-first personal knowledge systems
-- evergreen notes and note gardens
-- local-first tools
-- event-sourced systems built around immutable logs
-- long-horizon thinking about software that should remain useful as life changes
+- plain text files
+- local folders
+- append-only style capture
+- derived views
+- thin clients
+- replaceable agents
+
+The most important design choice is this:
+
+- **`notes.txt` is a generated view**
+- **canonical memory lives in immutable entry files**
+
+That makes it easier to support Mac, iPhone, Dropbox, and later Windows and Android without making one shared text file the fragile write target.
+
+## Current architecture
+
+`notesCapture` now has three layers:
+
+1. **capture clients**
+   - Mac hotkey popup
+   - iPhone Shortcut via Dropbox inbox
+   - future Android / Windows clients can use the same contract
+
+2. **canonical storage**
+   - one note = one immutable text file in `entries/`
+
+3. **materialized view**
+   - `notes.txt` is rebuilt from canonical entries
+
+There is also an `inbox/` folder for lightweight mobile capture:
+- any device can drop plain text files into `inbox/`
+- the Mac importer converts them into canonical entries
+- `notes.txt` is then regenerated automatically
 
 ## Features
 
-- `Option + Space` opens a small note window from anywhere
-- `Command + Enter` saves the note
-- notes are **appended** to `notes.txt` with a timestamp
+- `Option + Space` opens a quick note window on Mac
+- `Command + Enter` saves a note
 - `Enter` inserts a new line
 - `Command + Shift + 7` toggles bullet formatting
 - `Esc` closes the window
+- notes are merged into one timestamped `notes.txt`
+- mobile notes can flow into the same timeline through Dropbox
 
 ## One-command setup after clone
 
-Clone the repo, then run exactly one command:
+Clone the repo, then run:
 
 ```bash
 ./setup.sh
 ```
 
-That setup script will:
-- install **Hammerspoon** if Homebrew is available and Hammerspoon is not installed
-- compile the Swift helper to `bin/hotkey-notes`
-- create `notes.txt` if needed
-- wire `~/.hammerspoon/init.lua` to this repo automatically
-- register Hammerspoon to start at login
-- launch or restart Hammerspoon
-
-After setup, use:
-
-```txt
-Option + Space
-```
-
-If macOS prompts for permissions, allow Hammerspoon in:
-- **Privacy & Security → Accessibility**
-- **Privacy & Security → Input Monitoring**
+That one command will:
+- install Hammerspoon if needed
+- compile the Mac helper
+- choose a data directory
+  - Dropbox if available
+  - otherwise local repo data
+- create the storage folders
+- configure Hammerspoon
+- install a background sync/import job
+- start Hammerspoon
+- generate iPhone Dropbox shortcut instructions
 
 ## Quick start
 
@@ -86,9 +93,100 @@ cd notesCapture
 ./setup.sh
 ```
 
-## Save format
+## Data layout
 
-Each note is appended like this:
+By default, setup uses Dropbox if available:
+
+```txt
+<Dropbox>/notesCapture-data/
+├── entries/
+├── inbox/
+├── legacy/
+└── notes.txt
+```
+
+If Dropbox is not available, setup falls back to:
+
+```txt
+<repo>/data/
+```
+
+### What each folder means
+
+- `entries/` → canonical immutable note files
+- `inbox/` → lightweight capture dropbox for phone and future clients
+- `notes.txt` → generated readable timeline
+- `legacy/` → archived pre-entry notes if setup finds an older `notes.txt`
+
+## Mac usage
+
+After setup:
+
+- press `Option + Space`
+- type your note
+- press `Command + Enter`
+
+The Mac helper writes a canonical entry file and regenerates `notes.txt`.
+
+## iPhone / iPad usage
+
+This repo includes an Apple-friendly mobile path without needing a full iOS app.
+
+After setup, open:
+
+```txt
+mobile/ios/SHORTCUT_SETUP.txt
+```
+
+If your chosen data directory lives in Dropbox, that generated file tells you:
+- the exact Dropbox inbox folder to use
+- how to create the Shortcut
+- where merged notes will appear
+
+If your chosen data directory is local-only, the generated file will tell you to rerun setup with a Dropbox-backed data directory for mobile sync.
+
+Basic model:
+- iPhone Shortcut asks for text or dictation
+- it saves a plain `.txt` file into the Dropbox `inbox/`
+- your Mac automatically imports it into `entries/`
+- `notes.txt` updates with the same timeline as laptop notes
+
+## Why Dropbox first
+
+Dropbox is a good starting point because it is:
+- simple
+- cross-device
+- easy for iPhone shortcuts
+- more OS-agnostic than iCloud
+
+This keeps the architecture open for:
+- Windows capture tools
+- Android automation tools
+- future HTTP/API ingestion
+
+## Cross-platform contract
+
+The stable contract is intentionally tiny:
+
+### Desktop direct-write contract
+A client may write one plain text file per note into:
+
+```txt
+entries/YYYY/MM/DD/
+```
+
+### Lightweight mobile contract
+A client may drop one plain text file per note into:
+
+```txt
+inbox/
+```
+
+As long as a client can create a text file in the shared folder, it can participate in the system.
+
+That is what makes this architecture extensible.
+
+## Example generated timeline
 
 ```txt
 [2026-03-12 03:51:59]
@@ -103,62 +201,80 @@ A quick thought goes here
 
 ```txt
 notesCapture/
+├── config/
 ├── hammerspoon/
 │   └── init.lua
+├── mobile/
+│   └── ios/
+│       └── README.md
+├── scripts/
+│   ├── materialize_notes.sh
+│   └── process_inbox.sh
 ├── quicknote.swift
 ├── setup.sh
 ├── LICENSE
 └── README.md
 ```
 
-Generated locally at runtime, but not tracked in git:
-- `bin/hotkey-notes`
-- `notes.txt`
-- `.DS_Store`
+Generated locally but not committed:
+- `bin/notesCapture`
+- `config/config.env`
+- `config/generated.lua`
+- `data/`
+- `mobile/ios/SHORTCUT_SETUP.txt`
 
-## Notes location
+## Setup options
 
-Your notes are saved here:
-
-```txt
-<repo>/notes.txt
-```
-
-For example:
-
-```txt
-~/Desktop/Projects/notesCapture/notes.txt
-```
-
-## Rebuild manually
-
-If you change the Swift helper and want to rebuild manually:
+Default:
 
 ```bash
-swiftc ./quicknote.swift -o ./bin/hotkey-notes
-killall Hammerspoon || true
-open -a Hammerspoon
+./setup.sh
 ```
 
-## How it works
+Force Dropbox if available:
 
-- `hammerspoon/init.lua` binds `Option + Space`
-- Hammerspoon launches the compiled helper binary
-- the Swift helper shows a floating note window
-- saving appends a timestamped entry to `notes.txt` using append mode
-- the Hammerspoon config resolves paths relative to the cloned repo, so it works outside `~/Desktop/Projects` too
+```bash
+./setup.sh --use-dropbox
+```
+
+Force local repo data:
+
+```bash
+./setup.sh --use-repo-data
+```
+
+Use a custom shared folder:
+
+```bash
+./setup.sh --data-dir "$HOME/Dropbox/notesCapture-data"
+```
 
 ## Requirements
 
+Current usable setup:
 - macOS
 - Swift compiler (`swiftc`)
-- Homebrew only if Hammerspoon is not already installed and you want setup to install it automatically
+- Hammerspoon
+- Dropbox optional but recommended for phone capture
 
-If `swiftc` is missing, install Xcode Command Line Tools and rerun:
+If `swiftc` is missing:
 
 ```bash
 xcode-select --install
 ```
+
+## Notes for future expansion
+
+This structure is designed so future clients can be added without changing the core data model:
+- Windows global hotkey capture
+- Android Shortcut / Tasker capture
+- web/API capture
+- agentic processors for todos, summaries, people, and reflections
+
+The slow durable layer remains the same:
+- immutable entry files
+- a generated timeline
+- local user-owned data
 
 ## License
 

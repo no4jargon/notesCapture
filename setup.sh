@@ -2,19 +2,65 @@
 set -euo pipefail
 
 if [[ "$(uname)" != "Darwin" ]]; then
-  echo "notesCapture setup is supported on macOS only."
+  echo "notesCapture setup is currently supported on macOS."
+  echo "The storage format is OS-agnostic and Dropbox-friendly for future Windows/Android clients."
   exit 1
 fi
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
 BIN_DIR="$REPO_ROOT/bin"
-BINARY="$BIN_DIR/hotkey-notes"
-NOTES_FILE="$REPO_ROOT/notes.txt"
+BINARY="$BIN_DIR/notesCapture"
 HAMMERSPOON_USER_DIR="$HOME/.hammerspoon"
 HAMMERSPOON_USER_INIT="$HAMMERSPOON_USER_DIR/init.lua"
 LAUNCH_AGENT_DIR="$HOME/Library/LaunchAgents"
-LAUNCH_AGENT_PLIST="$LAUNCH_AGENT_DIR/com.notescapture.hammerspoon.plist"
+HAMMERSPOON_PLIST="$LAUNCH_AGENT_DIR/com.notescapture.hammerspoon.plist"
+SYNC_PLIST="$LAUNCH_AGENT_DIR/com.notescapture.sync.plist"
 REPO_HAMMERSPOON_INIT="$REPO_ROOT/hammerspoon/init.lua"
+CONFIG_DIR="$REPO_ROOT/config"
+CONFIG_ENV="$CONFIG_DIR/config.env"
+GENERATED_LUA="$CONFIG_DIR/generated.lua"
+IOS_SETUP_FILE="$REPO_ROOT/mobile/ios/SHORTCUT_SETUP.txt"
+DATA_DIR="${NOTESCAPTURE_DATA_DIR:-}"
+PREFERRED_MODE=""
+DROPBOX_ROOT=""
+
+usage() {
+  cat <<EOF
+Usage: ./setup.sh [options]
+
+Options:
+  --data-dir PATH      Use a specific data directory
+  --use-dropbox        Prefer Dropbox for shared data
+  --use-repo-data      Store data inside the repo at ./data
+  --help               Show this message
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --data-dir)
+      DATA_DIR="$2"
+      shift 2
+      ;;
+    --use-dropbox)
+      PREFERRED_MODE="dropbox"
+      shift
+      ;;
+    --use-repo-data)
+      PREFERRED_MODE="repo"
+      shift
+      ;;
+    --help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1"
+      usage
+      exit 1
+      ;;
+  esac
+done
 
 ensure_command() {
   local cmd="$1"
@@ -23,6 +69,53 @@ ensure_command() {
     echo "$message"
     exit 1
   fi
+}
+
+resolve_path() {
+  python3 - "$1" <<'PY'
+from pathlib import Path
+import sys
+print(Path(sys.argv[1]).expanduser().resolve())
+PY
+}
+
+find_dropbox_root() {
+  local candidate
+
+  if [[ -d "$HOME/Library/CloudStorage" ]]; then
+    candidate="$(find "$HOME/Library/CloudStorage" -maxdepth 1 -type d -name 'Dropbox*' 2>/dev/null | head -n 1 || true)"
+    if [[ -n "$candidate" ]]; then
+      resolve_path "$candidate"
+      return
+    fi
+  fi
+
+  if [[ -d "$HOME/Dropbox" ]]; then
+    resolve_path "$HOME/Dropbox"
+    return
+  fi
+}
+
+choose_data_dir() {
+  if [[ -n "$DATA_DIR" ]]; then
+    return
+  fi
+
+  local dropbox_root
+  dropbox_root="$(find_dropbox_root || true)"
+  DROPBOX_ROOT="$dropbox_root"
+
+  if [[ "$PREFERRED_MODE" == "repo" ]]; then
+    DATA_DIR="$REPO_ROOT/data"
+    return
+  fi
+
+  if [[ -n "$dropbox_root" ]]; then
+    DATA_DIR="$dropbox_root/notesCapture-data"
+    return
+  fi
+
+  DATA_DIR="$REPO_ROOT/data"
 }
 
 install_hammerspoon() {
@@ -44,8 +137,40 @@ install_hammerspoon() {
 build_helper() {
   ensure_command swiftc "swiftc was not found. Install Xcode Command Line Tools, then rerun ./setup.sh"
   mkdir -p "$BIN_DIR"
-  echo "Building helper..."
+  echo "Building notesCapture helper..."
   swiftc "$REPO_ROOT/quicknote.swift" -o "$BINARY"
+}
+
+ensure_storage_dirs() {
+  mkdir -p "$DATA_DIR" "$DATA_DIR/inbox" "$DATA_DIR/entries" "$DATA_DIR/legacy"
+}
+
+archive_legacy_notes_if_needed() {
+  local notes_file="$DATA_DIR/notes.txt"
+  local archive_marker="$DATA_DIR/legacy/.archived"
+
+  if [[ -f "$notes_file" ]] && [[ ! -f "$archive_marker" ]]; then
+    if grep -q '[^[:space:]]' "$notes_file" && ! find "$DATA_DIR/entries" -type f -name '*.txt' | grep -q .; then
+      cp "$notes_file" "$DATA_DIR/legacy/notes-before-entries-$(date '+%Y-%m-%d_%H-%M-%S').txt"
+      : > "$archive_marker"
+    fi
+  fi
+}
+
+write_config_files() {
+  mkdir -p "$CONFIG_DIR"
+
+  cat > "$CONFIG_ENV" <<EOF
+REPO_ROOT="$REPO_ROOT"
+DATA_DIR="$DATA_DIR"
+BINARY="$BINARY"
+EOF
+
+  cat > "$GENERATED_LUA" <<EOF
+return {
+  dataDir = [[${DATA_DIR}]]
+}
+EOF
 }
 
 write_hammerspoon_loader() {
@@ -57,9 +182,9 @@ dofile([[${REPO_HAMMERSPOON_INIT}]])
 EOF
 }
 
-write_launch_agent() {
+write_hammerspoon_launch_agent() {
   mkdir -p "$LAUNCH_AGENT_DIR"
-  cat > "$LAUNCH_AGENT_PLIST" <<EOF
+  cat > "$HAMMERSPOON_PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -80,8 +205,94 @@ write_launch_agent() {
 </plist>
 EOF
 
-  launchctl unload "$LAUNCH_AGENT_PLIST" >/dev/null 2>&1 || true
-  launchctl load "$LAUNCH_AGENT_PLIST"
+  launchctl unload "$HAMMERSPOON_PLIST" >/dev/null 2>&1 || true
+  launchctl load "$HAMMERSPOON_PLIST"
+}
+
+write_sync_launch_agent() {
+  cat > "$SYNC_PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.notescapture.sync</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>${REPO_ROOT}/scripts/process_inbox.sh</string>
+    <string>${DATA_DIR}</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartInterval</key>
+  <integer>20</integer>
+  <key>KeepAlive</key>
+  <false/>
+</dict>
+</plist>
+EOF
+
+  launchctl unload "$SYNC_PLIST" >/dev/null 2>&1 || true
+  launchctl load "$SYNC_PLIST"
+}
+
+write_ios_setup_file() {
+  mkdir -p "$(dirname "$IOS_SETUP_FILE")"
+
+  if [[ -z "$DROPBOX_ROOT" ]]; then
+    DROPBOX_ROOT="$(find_dropbox_root || true)"
+  fi
+
+  local resolved_data_dir
+  resolved_data_dir="$(resolve_path "$DATA_DIR")"
+
+  if [[ -n "$DROPBOX_ROOT" && "$resolved_data_dir" == "$DROPBOX_ROOT"* ]]; then
+    local dropbox_relative
+    dropbox_relative="${resolved_data_dir#"$DROPBOX_ROOT"}"
+    dropbox_relative="${dropbox_relative#/}"
+
+    cat > "$IOS_SETUP_FILE" <<EOF
+notesCapture iPhone / iPad Dropbox setup
+
+1. Install the Dropbox app and Apple Shortcuts.
+2. Create a Shortcut named notesCapture.
+3. Add these actions:
+   - Ask for Input (Text, prompt: Quick note)
+   - Current Date
+   - Format Date -> Custom -> yyyy-MM-dd_HH-mm-ss
+   - Text -> use the note text from Ask for Input
+   - Save File to Dropbox
+4. Save the file into this Dropbox folder:
+   /${dropbox_relative}/inbox
+5. Recommended file name:
+   [Formatted Date]-iphone.txt
+6. On your Mac, notesCapture will automatically import inbox files into:
+   ${resolved_data_dir}/entries
+7. Your merged timeline stays here:
+   ${resolved_data_dir}/notes.txt
+
+Any future client can do the same thing by dropping plain text files into the inbox folder.
+EOF
+    return
+  fi
+
+  cat > "$IOS_SETUP_FILE" <<EOF
+notesCapture mobile setup
+
+Your current data directory is not inside Dropbox:
+${resolved_data_dir}
+
+That means Mac capture works, but phone capture will not sync yet.
+
+To enable iPhone capture, rerun setup with a Dropbox-backed data directory, for example:
+./setup.sh --data-dir "$HOME/Dropbox/notesCapture-data"
+
+Once your data directory lives in Dropbox, notesCapture will use this mobile contract:
+- phone writes plain text files into inbox/
+- Mac imports them into entries/
+- notes.txt is regenerated automatically
+EOF
 }
 
 restart_hammerspoon() {
@@ -91,17 +302,29 @@ restart_hammerspoon() {
 }
 
 main() {
+  choose_data_dir
   install_hammerspoon
+  ensure_command bash "bash is required"
   build_helper
-  touch "$NOTES_FILE"
+  ensure_storage_dirs
+  archive_legacy_notes_if_needed
+  write_config_files
   write_hammerspoon_loader
-  write_launch_agent
+  write_hammerspoon_launch_agent
+  write_sync_launch_agent
+  chmod +x "$REPO_ROOT/scripts/materialize_notes.sh" "$REPO_ROOT/scripts/process_inbox.sh" "$BINARY"
+  "$REPO_ROOT/scripts/process_inbox.sh" "$DATA_DIR"
+  write_ios_setup_file
   restart_hammerspoon
 
   echo
   echo "notesCapture is set up."
+  echo "Project: $REPO_ROOT"
+  echo "Data directory: $DATA_DIR"
   echo "Hotkey: Option + Space"
-  echo "Notes file: $NOTES_FILE"
+  echo "Merged notes: $DATA_DIR/notes.txt"
+  echo "Mobile inbox: $DATA_DIR/inbox"
+  echo "iPhone shortcut guide: $IOS_SETUP_FILE"
   echo
   echo "If macOS prompts for permissions, allow Hammerspoon in:"
   echo "- Privacy & Security > Accessibility"

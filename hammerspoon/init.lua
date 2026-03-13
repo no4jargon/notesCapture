@@ -2,9 +2,19 @@ local source = debug.getinfo(1, "S").source
 local scriptPath = source:sub(1, 1) == "@" and source:sub(2) or source
 local scriptDir = scriptPath:match("(.*/)" ) or "./"
 local projectDir = scriptDir:gsub("/$", ""):gsub("/hammerspoon$", "")
+local binary = projectDir .. "/bin/notesCapture"
+local generatedConfig = projectDir .. "/config/generated.lua"
 
-local binary = projectDir .. "/bin/hotkey-notes"
-local notesFile = projectDir .. "/notes.txt"
+local config = {
+  dataDir = projectDir
+}
+
+if hs.fs.attributes(generatedConfig) then
+  local ok, loaded = pcall(dofile, generatedConfig)
+  if ok and type(loaded) == "table" and type(loaded.dataDir) == "string" and loaded.dataDir ~= "" then
+    config = loaded
+  end
+end
 
 local quickNoteTask = nil
 
@@ -25,7 +35,7 @@ local function openQuickNote()
         informativeText = (stdErr ~= "" and stdErr) or "Quick note window failed to open"
       }):send()
     end
-  end, { notesFile })
+  end, { config.dataDir })
 
   if not quickNoteTask then
     hs.notify.new({

@@ -79,7 +79,11 @@ final class NoteTextView: NSTextView {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+    private let dataDirectoryURL: URL
     private let notesFileURL: URL
+    private let entriesDirectoryURL: URL
+    private let inboxDirectoryURL: URL
+
     private let timestampFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -87,17 +91,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return formatter
     }()
 
+    private let filenameTimestampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+        return formatter
+    }()
+
     private var panel: NotePanel!
     private var textView: NoteTextView!
 
-    init(notesFileURL: URL) {
-        self.notesFileURL = notesFileURL
+    init(dataDirectoryURL: URL) {
+        self.dataDirectoryURL = dataDirectoryURL
+        self.notesFileURL = dataDirectoryURL.appendingPathComponent("notes.txt")
+        self.entriesDirectoryURL = dataDirectoryURL.appendingPathComponent("entries", isDirectory: true)
+        self.inboxDirectoryURL = dataDirectoryURL.appendingPathComponent("inbox", isDirectory: true)
         super.init()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        createNotesFileIfNeeded()
+        do {
+            try prepareStorage()
+        } catch {
+            let alert = NSAlert(error: error)
+            alert.runModal()
+            NSApp.terminate(nil)
+            return
+        }
         buildUI()
         showWindow()
     }
@@ -253,11 +274,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return
         }
 
-        let timestamp = timestampFormatter.string(from: Date())
-        let entry = "[\(timestamp)]\n\(text)\n\n"
-
         do {
-            try append(entry: entry)
+            try saveEntry(text: text, source: "mac-hotkey")
+            try materializeNotes()
             panel.close()
         } catch {
             let alert = NSAlert(error: error)
@@ -321,14 +340,97 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func createNotesFileIfNeeded() {
-        guard !FileManager.default.fileExists(atPath: notesFileURL.path) else { return }
-        FileManager.default.createFile(atPath: notesFileURL.path, contents: nil)
+    private func prepareStorage() throws {
+        try FileManager.default.createDirectory(at: dataDirectoryURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: entriesDirectoryURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: inboxDirectoryURL, withIntermediateDirectories: true)
+        if !FileManager.default.fileExists(atPath: notesFileURL.path) {
+            FileManager.default.createFile(atPath: notesFileURL.path, contents: nil)
+        }
     }
 
-    private func append(entry: String) throws {
-        let path = notesFileURL.path
-        let fd = open(path, O_WRONLY | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
+    private func saveEntry(text: String, source: String) throws {
+        let now = Date()
+        let calendar = Calendar.current
+        let year = calendar.component(.year, from: now)
+        let month = calendar.component(.month, from: now)
+        let day = calendar.component(.day, from: now)
+
+        let dayDirectoryURL = entriesDirectoryURL
+            .appendingPathComponent(String(format: "%04d", year), isDirectory: true)
+            .appendingPathComponent(String(format: "%02d", month), isDirectory: true)
+            .appendingPathComponent(String(format: "%02d", day), isDirectory: true)
+
+        try FileManager.default.createDirectory(at: dayDirectoryURL, withIntermediateDirectories: true)
+
+        let timestamp = filenameTimestampFormatter.string(from: now)
+        let deviceName = sanitize(Host.current().localizedName ?? "mac")
+        let safeSource = sanitize(source)
+        let uniqueID = String(UUID().uuidString.prefix(8)).lowercased()
+        let filename = "\(timestamp)--\(safeSource)--\(deviceName)--\(uniqueID).txt"
+        let fileURL = dayDirectoryURL.appendingPathComponent(filename)
+
+        try writeAtomically(text: text + "\n", to: fileURL, exclusive: true)
+    }
+
+    private func materializeNotes() throws {
+        let entries = try entryFileURLs()
+        var output = ""
+
+        for entryURL in entries {
+            let text = try String(contentsOf: entryURL, encoding: .utf8)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            guard !text.isEmpty else { continue }
+
+            let displayTimestamp = displayTimestamp(for: entryURL.lastPathComponent)
+            output += "[\(displayTimestamp)]\n\(text)\n\n"
+        }
+
+        try writeAtomically(text: output, to: notesFileURL, exclusive: false)
+    }
+
+    private func entryFileURLs() throws -> [URL] {
+        guard FileManager.default.fileExists(atPath: entriesDirectoryURL.path) else { return [] }
+
+        let enumerator = FileManager.default.enumerator(
+            at: entriesDirectoryURL,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        )
+
+        var files: [URL] = []
+        while let url = enumerator?.nextObject() as? URL {
+            let values = try url.resourceValues(forKeys: [.isRegularFileKey])
+            if values.isRegularFile == true, url.pathExtension.lowercased() == "txt" {
+                files.append(url)
+            }
+        }
+
+        return files.sorted { $0.path < $1.path }
+    }
+
+    private func displayTimestamp(for filename: String) -> String {
+        let prefix = filename.components(separatedBy: "--").first ?? filename.replacingOccurrences(of: ".txt", with: "")
+        if let date = filenameTimestampFormatter.date(from: prefix) {
+            return timestampFormatter.string(from: date)
+        }
+        return prefix.replacingOccurrences(of: "_", with: " ")
+    }
+
+    private func sanitize(_ value: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        let scalars = value.unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" }
+        let collapsed = String(scalars)
+            .replacingOccurrences(of: "--+", with: "-", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        return collapsed.isEmpty ? "unknown" : collapsed
+    }
+
+    private func writeAtomically(text: String, to url: URL, exclusive: Bool) throws {
+        let path = url.path
+        let flags = exclusive ? (O_WRONLY | O_CREAT | O_EXCL) : (O_WRONLY | O_CREAT | O_TRUNC)
+        let fd = open(path, flags, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
 
         guard fd != -1 else {
             throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
@@ -336,7 +438,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         defer { close(fd) }
 
-        let data = Data(entry.utf8)
+        let data = Data(text.utf8)
         let result = data.withUnsafeBytes { buffer in
             write(fd, buffer.baseAddress, buffer.count)
         }
@@ -347,10 +449,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 }
 
-let notesPath = CommandLine.arguments.dropFirst().first ?? "./notes.txt"
-let notesURL = URL(fileURLWithPath: notesPath)
+let dataPath = CommandLine.arguments.dropFirst().first ?? FileManager.default.currentDirectoryPath
+let dataURL = URL(fileURLWithPath: dataPath, isDirectory: true)
 
 let app = NSApplication.shared
-let delegate = AppDelegate(notesFileURL: notesURL)
+let delegate = AppDelegate(dataDirectoryURL: dataURL)
 app.delegate = delegate
 app.run()
