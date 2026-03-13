@@ -44,9 +44,9 @@ That makes it easier to support Mac, iPhone, Dropbox, and later Windows, Android
 `notesCapture` currently has three working layers:
 
 1. **capture clients**
-   - Mac hotkey popup
-   - iPhone Shortcut via Dropbox inbox
-   - future Android / Windows clients can use the same transitional contract
+   - Mac hotkey popup via `ingress/local/`
+   - iPhone Shortcut via `ingress/dropbox/`
+   - future Android / Windows clients can use the same transitional ingress contract
 
 2. **current canonical storage**
    - one note = one immutable text file in `entries/`
@@ -55,8 +55,9 @@ That makes it easier to support Mac, iPhone, Dropbox, and later Windows, Android
    - `notes.txt` is rebuilt from canonical entries
 
 There is also a transitional raw-ingress layer:
-- `inbox/` is still supported as the legacy mobile drop location
-- `ingress/` is now reserved as the future transport-specific append layer
+- `ingress/local/` is the active Mac producer path
+- `ingress/dropbox/` is the preferred mobile producer path
+- `inbox/` is still supported as a deprecated legacy mobile drop location
 - the Mac importer converts raw submissions into canonical entries
 - `notes.txt` is then regenerated automatically
 
@@ -151,8 +152,8 @@ If Dropbox is not available, setup falls back to:
 ### What each folder means
 
 - `entries/` → current canonical immutable note files
-- `ingress/` → transport-specific staging area for future append-only producers
-- `inbox/` → legacy lightweight capture dropbox kept for backward compatibility
+- `ingress/` → transport-specific staging area for append-only producers
+- `inbox/` → deprecated legacy mobile drop path kept for backward compatibility
 - `notes.txt` → generated readable timeline
 - `legacy/` → archived pre-entry notes if setup finds an older `notes.txt`
 
@@ -177,7 +178,7 @@ mobile/ios/SHORTCUT_SETUP.txt
 ```
 
 If your chosen data directory lives in Dropbox, that generated file tells you:
-- the exact Dropbox inbox folder to use
+- the exact Dropbox ingress folder to use
 - how to create the Shortcut
 - where merged notes will appear
 
@@ -185,9 +186,12 @@ If your chosen data directory is local-only, the generated file will tell you to
 
 Basic model:
 - iPhone Shortcut asks for text or dictation
-- it saves a plain `.txt` file into the Dropbox `inbox/`
+- it saves a plain `.txt` file into the Dropbox `ingress/dropbox/`
 - your Mac automatically imports it into `entries/`
 - `notes.txt` updates with the same timeline as laptop notes
+
+Legacy note:
+- older setups that still write to `inbox/` continue to work for now, but that path is deprecated
 
 ## Why Dropbox first
 
@@ -213,14 +217,21 @@ A client may write one plain text file per note into:
 entries/YYYY/MM/DD/
 ```
 
-### Lightweight mobile contract
-A client may drop one plain text file per note into:
+### Preferred mobile contract
+A client should drop one plain text file per note into:
+
+```txt
+ingress/dropbox/
+```
+
+### Legacy mobile compatibility contract
+Older clients may still drop one plain text file per note into:
 
 ```txt
 inbox/
 ```
 
-As long as a client can create a text file in the shared folder, it can participate in the current system.
+As long as a client can create a text file in the shared folder, it can participate in the current transitional system.
 
 ## Future producer contract
 
