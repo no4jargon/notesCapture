@@ -15,6 +15,11 @@ HAMMERSPOON_USER_INIT="$HAMMERSPOON_USER_DIR/init.lua"
 LAUNCH_AGENT_DIR="$HOME/Library/LaunchAgents"
 HAMMERSPOON_PLIST="$LAUNCH_AGENT_DIR/com.notescapture.hammerspoon.plist"
 SYNC_PLIST="$LAUNCH_AGENT_DIR/com.notescapture.sync.plist"
+APP_SUPPORT_DIR="$HOME/Library/Application Support/notesCapture"
+SYNC_PROCESS_SCRIPT="$APP_SUPPORT_DIR/process_inbox.sh"
+SYNC_MATERIALIZE_SCRIPT="$APP_SUPPORT_DIR/materialize_notes.sh"
+SYNC_LOG_OUT="$APP_SUPPORT_DIR/sync.stdout.log"
+SYNC_LOG_ERR="$APP_SUPPORT_DIR/sync.stderr.log"
 REPO_HAMMERSPOON_INIT="$REPO_ROOT/hammerspoon/init.lua"
 CONFIG_DIR="$REPO_ROOT/config"
 CONFIG_ENV="$CONFIG_DIR/config.env"
@@ -209,32 +214,115 @@ EOF
   launchctl load "$HAMMERSPOON_PLIST"
 }
 
-write_sync_launch_agent() {
-  cat > "$SYNC_PLIST" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>com.notescapture.sync</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/bin/bash</string>
-    <string>${REPO_ROOT}/scripts/process_inbox.sh</string>
-    <string>${DATA_DIR}</string>
-  </array>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>StartInterval</key>
-  <integer>20</integer>
-  <key>KeepAlive</key>
-  <false/>
-</dict>
-</plist>
+write_sync_support_scripts() {
+  mkdir -p "$APP_SUPPORT_DIR"
+
+  cat > "$SYNC_MATERIALIZE_SCRIPT" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+DATA_DIR="${1:-}"
+if [[ -z "$DATA_DIR" ]]; then
+  echo "Usage: $0 <data-dir>"
+  exit 1
+fi
+
+ENTRIES_DIR="$DATA_DIR/entries"
+NOTES_FILE="$DATA_DIR/notes.txt"
+TMP_FILE="$DATA_DIR/.notes.txt.tmp"
+ENTRY_LIST="$DATA_DIR/.notesCapture-entry-list.tmp"
+
+mkdir -p "$DATA_DIR"
+find "$ENTRIES_DIR" -type f -name '*.txt' 2>/dev/null | sort > "$ENTRY_LIST" || true
+
+if [[ ! -s "$ENTRY_LIST" ]]; then
+  rm -f "$ENTRY_LIST"
+  : > "$NOTES_FILE"
+  exit 0
+fi
+
+: > "$TMP_FILE"
+while IFS= read -r file; do
+  [[ -n "$file" ]] || continue
+  if ! grep -q '[^[:space:]]' "$file"; then
+    continue
+  fi
+
+  base="$(basename "$file")"
+  prefix="${base%%--*}"
+  if [[ "$prefix" == "$base" ]]; then
+    prefix="${base%.txt}"
+  fi
+
+  display_ts="$(echo "$prefix" | sed -E 's/^([0-9]{4}-[0-9]{2}-[0-9]{2})_([0-9]{2})-([0-9]{2})-([0-9]{2})$/\1 \2:\3:\4/')"
+  printf '[%s]\n' "$display_ts" >> "$TMP_FILE"
+  cat "$file" >> "$TMP_FILE"
+  printf '\n\n' >> "$TMP_FILE"
+done < "$ENTRY_LIST"
+
+mv "$TMP_FILE" "$NOTES_FILE"
+rm -f "$ENTRY_LIST"
 EOF
 
+  cat > "$SYNC_PROCESS_SCRIPT" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+DATA_DIR="\${1:-}"
+if [[ -z "\$DATA_DIR" ]]; then
+  echo "Usage: \$0 <data-dir>"
+  exit 1
+fi
+
+INBOX_DIR="\$DATA_DIR/inbox"
+ARCHIVE_DIR="\$INBOX_DIR/archive"
+ENTRIES_DIR="\$DATA_DIR/entries"
+MATERIALIZE_SCRIPT="${SYNC_MATERIALIZE_SCRIPT}"
+INBOX_LIST="\$DATA_DIR/.notesCapture-inbox-list.tmp"
+
+mkdir -p "\$INBOX_DIR" "\$ARCHIVE_DIR" "\$ENTRIES_DIR"
+find "\$INBOX_DIR" -maxdepth 1 -type f \( -name '*.txt' -o -name '*.md' \) | sort > "\$INBOX_LIST" || true
+
+imported_any=0
+while IFS= read -r file; do
+  [[ -n "\$file" ]] || continue
+
+  if ! grep -q '[^[:space:]]' "\$file"; then
+    mv "\$file" "\$ARCHIVE_DIR/\$(basename "\$file").empty"
+    continue
+  fi
+
+  mtime="\$(stat -f '%m' "\$file")"
+  timestamp="\$(date -r "\$mtime" '+%Y-%m-%d_%H-%M-%S')"
+  year="\$(date -r "\$mtime" '+%Y')"
+  month="\$(date -r "\$mtime" '+%m')"
+  day="\$(date -r "\$mtime" '+%d')"
+  device="dropbox-inbox"
+  source_name="mobile-capture"
+  unique_id="\$(uuidgen | tr '[:upper:]' '[:lower:]' | cut -c1-8)"
+
+  entry_dir="\$ENTRIES_DIR/\$year/\$month/\$day"
+  mkdir -p "\$entry_dir"
+  entry_file="\$entry_dir/\$timestamp--\$source_name--\$device--\$unique_id.txt"
+
+  cp "\$file" "\$entry_file"
+  mv "\$file" "\$ARCHIVE_DIR/\$(basename "\$file").imported"
+  imported_any=1
+done < "\$INBOX_LIST"
+
+rm -f "\$INBOX_LIST"
+
+if [[ "\$imported_any" -eq 1 || ! -f "\$DATA_DIR/notes.txt" ]]; then
+  "\$MATERIALIZE_SCRIPT" "\$DATA_DIR"
+fi
+EOF
+
+  chmod +x "$SYNC_MATERIALIZE_SCRIPT" "$SYNC_PROCESS_SCRIPT"
+}
+
+disable_sync_launch_agent() {
   launchctl unload "$SYNC_PLIST" >/dev/null 2>&1 || true
-  launchctl load "$SYNC_PLIST"
+  rm -f "$SYNC_PLIST"
 }
 
 write_ios_setup_file() {
@@ -311,9 +399,10 @@ main() {
   write_config_files
   write_hammerspoon_loader
   write_hammerspoon_launch_agent
-  write_sync_launch_agent
+  write_sync_support_scripts
+  disable_sync_launch_agent
   chmod +x "$REPO_ROOT/scripts/materialize_notes.sh" "$REPO_ROOT/scripts/process_inbox.sh" "$BINARY"
-  "$REPO_ROOT/scripts/process_inbox.sh" "$DATA_DIR"
+  "$SYNC_PROCESS_SCRIPT" "$DATA_DIR"
   write_ios_setup_file
   restart_hammerspoon
 
