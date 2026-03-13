@@ -133,6 +133,28 @@ class NotesCaptureTestCase(unittest.TestCase):
             notes = (data_dir / "notes.txt").read_text(encoding="utf-8")
             self.assertEqual(notes, "[2026-03-13 17:26:45]\nHello from ingress\n\n")
 
+    def test_process_inbox_imports_local_ingress_files_for_mac_capture_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = self.make_data_dir(Path(tmp))
+            ingress = data_dir / "ingress" / "local"
+
+            note_file = ingress / "mac-capture.txt"
+            note_file.write_text("Hello from Mac ingress\n", encoding="utf-8")
+            self.run_cmd("touch", "-t", "202603131730.10", str(note_file))
+
+            self.run_cmd("bash", str(PROCESS_INBOX), str(data_dir))
+
+            imported_entries = sorted((data_dir / "entries").rglob("*.txt"))
+            self.assertEqual(len(imported_entries), 1)
+            self.assertTrue(
+                imported_entries[0].name.startswith("2026-03-13_17-30-10--mac-hotkey--local-ingress--")
+            )
+            self.assertEqual(imported_entries[0].read_text(encoding="utf-8"), "Hello from Mac ingress\n")
+            self.assertTrue((ingress / "archive" / "mac-capture.txt.imported").exists())
+
+            notes = (data_dir / "notes.txt").read_text(encoding="utf-8")
+            self.assertEqual(notes, "[2026-03-13 17:30:10]\nHello from Mac ingress\n\n")
+
     def test_process_inbox_moves_empty_files_to_archive_without_entry(self):
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = self.make_data_dir(Path(tmp))
@@ -200,6 +222,13 @@ class NotesCaptureTestCase(unittest.TestCase):
             imported_entries = sorted((data_dir / "entries").rglob("*.txt"))
             self.assertEqual(len(imported_entries), 1)
             self.assertIn("Imported 0 entries", second.stdout)
+
+    def test_quicknote_source_targets_local_ingress_not_entries(self):
+        source = QUICKNOTE.read_text(encoding="utf-8")
+        self.assertIn('appendingPathComponent("ingress", isDirectory: true)', source)
+        self.assertIn('appendingPathComponent("local", isDirectory: true)', source)
+        self.assertNotIn('try materializeNotes()', source)
+        self.assertNotIn('appendingPathComponent("entries", isDirectory: true)', source)
 
     @unittest.skipUnless(shutil.which("swiftc"), "swiftc not available")
     def test_quicknote_swift_typechecks(self):

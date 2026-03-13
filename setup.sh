@@ -337,6 +337,7 @@ import_from_source_dir() {
 
 import_from_source_dir "\$LEGACY_INBOX_DIR" "mobile-capture" "dropbox-inbox"
 import_from_source_dir "\$DROPBOX_INGRESS_DIR" "mobile-capture" "dropbox-ingress"
+import_from_source_dir "\$LOCAL_INGRESS_DIR" "mac-hotkey" "local-ingress"
 
 rm -f "\$TMP_LIST"
 
