@@ -381,15 +381,17 @@ notesCapture iPhone / iPad Dropbox setup
    - Text -> use the note text from Ask for Input
    - Save File to Dropbox
 4. Save the file into this Dropbox folder:
-   /${dropbox_relative}/inbox
+   /${dropbox_relative}/ingress/dropbox
 5. Recommended file name:
    [Formatted Date]-iphone.txt
-6. On your Mac, notesCapture will automatically import inbox files into:
+6. On your Mac, notesCapture will automatically import those ingress files into:
    ${resolved_data_dir}/entries
 7. Your merged timeline stays here:
    ${resolved_data_dir}/notes.txt
 
-Any future client can do the same thing by dropping plain text files into the inbox folder.
+Legacy compatibility note:
+- older setups may still write to inbox/
+- new mobile producers should write to ingress/dropbox/
 EOF
     return
   fi
@@ -406,9 +408,12 @@ To enable iPhone capture, rerun setup with a Dropbox-backed data directory, for 
 ./setup.sh --data-dir "$HOME/Dropbox/notesCapture-data"
 
 Once your data directory lives in Dropbox, notesCapture will use this mobile contract:
-- phone writes plain text files into inbox/
+- phone writes plain text files into ingress/dropbox/
 - Mac imports them into entries/
 - notes.txt is regenerated automatically
+
+Legacy note:
+- inbox/ is still supported for older setups but is deprecated
 EOF
 }
 
@@ -441,7 +446,7 @@ main() {
   echo "Data directory: $DATA_DIR"
   echo "Hotkey: Option + Space"
   echo "Merged notes: $DATA_DIR/notes.txt"
-  echo "Mobile inbox: $DATA_DIR/inbox"
+  echo "Mobile Dropbox ingress: $DATA_DIR/ingress/dropbox"
   echo "iPhone shortcut guide: $IOS_SETUP_FILE"
   echo
   echo "If macOS prompts for permissions, allow Hammerspoon in:"
