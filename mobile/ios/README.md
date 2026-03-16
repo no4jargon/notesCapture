@@ -3,9 +3,8 @@
 notesCapture uses a simple cross-device contract:
 
 - Mac capture writes to `ingress/local/`
-- mobile capture should drop plain text files into `ingress/dropbox/`
+- mobile capture writes plain text files into `ingress/dropbox/`
 - the Mac importer turns ingress files into canonical entries and rebuilds `notes.txt`
-- `inbox/` is still supported only as a deprecated legacy path
 
 ## Recommended Apple setup
 
@@ -37,7 +36,3 @@ This keeps mobile capture very lightweight and platform-friendly:
 - Android can later do the same thing with Dropbox or another shared folder
 - Windows can later drop files into the same ingress folder or another transport adapter
 - the durable memory remains plain files, not a proprietary database
-
-Legacy note:
-- if you already have an older Shortcut writing to `inbox/`, it will still work for now
-- new Shortcut setups should use `ingress/dropbox/`

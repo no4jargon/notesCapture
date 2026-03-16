@@ -149,7 +149,6 @@ build_helper() {
 ensure_storage_dirs() {
   mkdir -p \
     "$DATA_DIR" \
-    "$DATA_DIR/inbox" \
     "$DATA_DIR/entries" \
     "$DATA_DIR/ingress/dropbox" \
     "$DATA_DIR/ingress/local" \
@@ -290,13 +289,12 @@ fi
 
 ENTRIES_DIR="\$DATA_DIR/entries"
 INGRESS_DIR="\$DATA_DIR/ingress"
-LEGACY_INBOX_DIR="\$DATA_DIR/inbox"
 DROPBOX_INGRESS_DIR="\$INGRESS_DIR/dropbox"
 LOCAL_INGRESS_DIR="\$INGRESS_DIR/local"
 MATERIALIZE_SCRIPT="${SYNC_MATERIALIZE_SCRIPT}"
 TMP_LIST="\$DATA_DIR/.notesCapture-inbox-list.tmp"
 
-mkdir -p "\$ENTRIES_DIR" "\$LEGACY_INBOX_DIR" "\$DROPBOX_INGRESS_DIR" "\$LOCAL_INGRESS_DIR"
+mkdir -p "\$ENTRIES_DIR" "\$DROPBOX_INGRESS_DIR" "\$LOCAL_INGRESS_DIR"
 
 imported_any=0
 
@@ -335,7 +333,6 @@ import_from_source_dir() {
   done < "\$TMP_LIST"
 }
 
-import_from_source_dir "\$LEGACY_INBOX_DIR" "mobile-capture" "dropbox-inbox"
 import_from_source_dir "\$DROPBOX_INGRESS_DIR" "mobile-capture" "dropbox-ingress"
 import_from_source_dir "\$LOCAL_INGRESS_DIR" "mac-hotkey" "local-ingress"
 
@@ -389,9 +386,7 @@ notesCapture iPhone / iPad Dropbox setup
 7. Your merged timeline stays here:
    ${resolved_data_dir}/notes.txt
 
-Legacy compatibility note:
-- older setups may still write to inbox/
-- new mobile producers should write to ingress/dropbox/
+Save new mobile captures only to ingress/dropbox/.
 EOF
     return
   fi
@@ -411,9 +406,6 @@ Once your data directory lives in Dropbox, notesCapture will use this mobile con
 - phone writes plain text files into ingress/dropbox/
 - Mac imports them into entries/
 - notes.txt is regenerated automatically
-
-Legacy note:
-- inbox/ is still supported for older setups but is deprecated
 EOF
 }
 
