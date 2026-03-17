@@ -151,20 +151,7 @@ ensure_storage_dirs() {
     "$DATA_DIR" \
     "$DATA_DIR/entries" \
     "$DATA_DIR/ingress/dropbox" \
-    "$DATA_DIR/ingress/local" \
-    "$DATA_DIR/legacy"
-}
-
-archive_legacy_notes_if_needed() {
-  local notes_file="$DATA_DIR/notes.txt"
-  local archive_marker="$DATA_DIR/legacy/.archived"
-
-  if [[ -f "$notes_file" ]] && [[ ! -f "$archive_marker" ]]; then
-    if grep -q '[^[:space:]]' "$notes_file" && ! find "$DATA_DIR/entries" -type f -name '*.txt' | grep -q .; then
-      cp "$notes_file" "$DATA_DIR/legacy/notes-before-entries-$(date '+%Y-%m-%d_%H-%M-%S').txt"
-      : > "$archive_marker"
-    fi
-  fi
+    "$DATA_DIR/ingress/local"
 }
 
 write_config_files() {
@@ -421,7 +408,6 @@ main() {
   ensure_command bash "bash is required"
   build_helper
   ensure_storage_dirs
-  archive_legacy_notes_if_needed
   write_config_files
   write_hammerspoon_loader
   write_hammerspoon_launch_agent

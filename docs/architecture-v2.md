@@ -193,9 +193,8 @@ data/
 ├── state/
 │   ├── import-checkpoints/
 │   └── dedupe/
-├── rejects/
-│   └── 2026/
-└── legacy/
+└── rejects/
+    └── 2026/
 ```
 
 ### Directory responsibilities
@@ -207,7 +206,6 @@ data/
 - `indexes/`: search and agent-facing read models
 - `state/`: importer checkpoints, lockfiles, dedupe state
 - `rejects/`: invalid or unparseable submissions
-- `legacy/`: archived older formats during migration
 
 ---
 
@@ -416,9 +414,9 @@ Other future materializers may generate:
 ## Migration from current architecture
 
 Current system:
-- Mac helper writes canonical text files into `entries/`
-- phone writes plain text files into `inbox/`
-- importer converts inbox files into entries
+- Mac helper writes plain text capture files into `ingress/local/`
+- phone writes plain text capture files into `ingress/dropbox/`
+- importer converts ingress files into entries
 - `notes.txt` is generated from `entries/`
 
 Target system:
@@ -430,7 +428,7 @@ Target system:
 
 #### Phase 1: formalize the contracts
 - add a documented `capture-event-v1` schema
-- treat current `inbox/` as a legacy ingress transport
+- document `ingress/` as the current producer boundary
 - document `entries/` as current canonical storage, not final target
 
 #### Phase 2: make Mac capture symmetrical
