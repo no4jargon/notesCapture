@@ -1,38 +1,31 @@
 # iPhone setup for notesCapture
 
-notesCapture uses a simple cross-device contract:
-
+Current mobile contract:
 - Mac capture writes to `ingress/local/`
 - mobile capture writes plain text files into `ingress/dropbox/`
 - the Mac importer turns ingress files into canonical entries and rebuilds `notes.txt`
 
-## Recommended Apple setup
+## Setup
 
-Use:
-- **Dropbox** for shared storage
-- **Apple Shortcuts** for note capture
-
-After running `./setup.sh` on your Mac, open the generated file:
+1. run `./setup.sh` on your Mac
+2. open:
 
 ```txt
 mobile/ios/SHORTCUT_SETUP.txt
 ```
 
-That file contains the exact Dropbox ingress path for your machine.
+That generated file contains the exact Dropbox ingress path for your machine.
 
 ## Shortcut shape
 
 A minimal Shortcut should:
-1. ask for text input
-2. optionally use dictation instead of typing
-3. save the text as a `.txt` file into the notesCapture Dropbox `ingress/dropbox/` folder
+1. ask for text input or dictation
+2. save one `.txt` file into `ingress/dropbox/`
 
-Once the file lands in Dropbox, the Mac sync agent imports it into canonical entries and updates `notes.txt` automatically.
+Once the file lands in Dropbox, the Mac importer moves it into canonical storage and updates `notes.txt` automatically.
 
-## Why this design
+## Why this stays lightweight
 
-This keeps mobile capture very lightweight and platform-friendly:
 - iPhone does not need the repo
-- Android can later do the same thing with Dropbox or another shared folder
-- Windows can later drop files into the same ingress folder or another transport adapter
-- the durable memory remains plain files, not a proprietary database
+- Dropbox is enough for shared transport
+- future Android or Windows clients can use the same ingress pattern

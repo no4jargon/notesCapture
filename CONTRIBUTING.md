@@ -1,32 +1,32 @@
 # Contributing to notesCapture
 
-## Development method
+## Workflow
 
-Use a PR-first workflow for all meaningful changes.
+Use a PR-first workflow for meaningful changes.
 
 Expected flow:
 1. create a branch
-2. make the smallest safe change possible
-3. add or update tests first when behavior is changing
+2. add or update tests first when behavior changes
+3. make the smallest safe change
 4. run:
    ```bash
    ./tests/run_all.sh
    ```
 5. open a pull request
-6. wait for GitHub Actions `PR checks` to pass
-7. only then merge
+6. wait for GitHub Actions `PR checks`
+7. merge only after checks pass
 
-## What must be tested
+## What to test
 
-Every PR should preserve or explicitly update tests around these steps:
-- ingestion from raw inputs
+Every PR should preserve or intentionally update tests around:
+- raw ingress handling
 - canonical append behavior
-- materialization into `notes.txt`
-- any producer-specific behavior that can be tested safely
+- `notes.txt` materialization
+- producer-specific behavior that can be tested safely
 
 ## Current automated coverage
 
-`./tests/run_all.sh` currently verifies:
+`./tests/run_all.sh` verifies:
 - bash syntax for setup scripts
 - `materialize_notes.sh`
 - `process_inbox.sh`
@@ -34,12 +34,10 @@ Every PR should preserve or explicitly update tests around these steps:
 
 ## Merge policy
 
-Recommended GitHub repository setting:
+Recommended GitHub settings:
 - protect `main`
-- require pull requests before merging
-- require the `PR checks` status check to pass
+- require pull requests
+- require the `PR checks` status check
 
-The workflow file is already included in:
+Workflow file:
 - `.github/workflows/pr-checks.yml`
-
-If branch protection is not yet enabled in GitHub settings, do that next so failing PRs cannot be merged.

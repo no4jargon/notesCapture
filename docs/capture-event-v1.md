@@ -1,22 +1,14 @@
 # capture-event-v1
 
-This document defines the first formal capture contract for `notesCapture` producers.
+`capture-event-v1` is the first formal producer contract for `notesCapture`.
 
-It is designed to support:
-- text notes now
-- richer media later
+It is designed for:
 - write-only producers
 - transport-independent ingestion
+- text capture now
+- richer media later
 
-This is a producer-facing contract, not necessarily the exact on-disk canonical journal format.
-
-## Design goals
-
-- easy to emit from simple clients
-- stable across transports
-- append-only
-- no read dependency on prior state
-- future-proof enough for agents and non-text events
+This is a producer-facing contract, not necessarily the final on-disk journal format.
 
 ## Required fields
 
@@ -30,9 +22,9 @@ Current value:
 ```
 
 ### `kind`
-String describing the event type.
+Non-empty string.
 
-Initial recommended values:
+Common values:
 - `note.capture`
 - `link.capture`
 - `image.capture`
@@ -41,7 +33,7 @@ Initial recommended values:
 - `agent.observation`
 
 ### `captured_at`
-RFC 3339 timestamp recorded by the producer.
+RFC 3339 timestamp set by the producer.
 
 Example:
 
@@ -50,9 +42,7 @@ Example:
 ```
 
 ### `producer`
-Object identifying the producer.
-
-Required nested fields:
+Object with:
 - `type`
 - `id`
 
@@ -66,47 +56,20 @@ Example:
 ```
 
 ### `content`
-Object describing the payload.
-
-Required nested fields:
+Object with:
 - `mime_type`
 
-Common fields by mime type:
-- `text` for `text/plain`
-- `url` for captured links
-- `blob_ref` for larger media stored separately
-
----
+Common content fields:
+- `text`
+- `url`
+- `blob_ref`
 
 ## Recommended fields
 
-### `client_event_id`
-Producer-generated idempotency key.
-
-Examples:
-- iPhone shortcut filename stem
-- browser extension UUID
-- watch app UUID
-
-### `metadata`
-Free-form object for small structured context.
-
-Examples:
-- tags
-- app name
-- source page title
-- location hint
-- timezone
-- device battery state
-- camera zone
-
-### `blobs`
-Array of attached blob descriptors for future media capture.
-
-### `parents`
-Array of parent event IDs for derived or agent-generated events.
-
----
+- `client_event_id` — producer idempotency key
+- `metadata` — small structured context
+- `blobs` — attached blob descriptors
+- `parents` — parent event IDs for derived events
 
 ## Minimal text note example
 
@@ -154,7 +117,7 @@ Array of parent event IDs for derived or agent-generated events.
 }
 ```
 
-## Camera / sensor example
+## Sensor example
 
 ```json
 {
@@ -178,19 +141,16 @@ Array of parent event IDs for derived or agent-generated events.
 }
 ```
 
----
-
 ## Transport guidance
 
-## Preferred future transport
-Use an authenticated append API:
+### Preferred future transport
 
 ```http
 POST /v1/events
 ```
 
-## Transitional transport
-Use file-drop ingress by writing one JSON file per event into a transport-specific ingress folder.
+### Transitional transport
+Write one file per event into a transport-specific ingress folder.
 
 Example:
 
@@ -204,47 +164,39 @@ A producer should not write directly to:
 - materialized views
 - search indexes
 
----
-
 ## Validation rules
 
-A valid `capture-event-v1` payload should satisfy:
+A valid payload should satisfy:
 - `schema_version == 1`
-- `kind` is a non-empty string
-- `captured_at` is parseable RFC 3339
+- `kind` is non-empty
+- `captured_at` is valid RFC 3339
 - `producer.type` is non-empty
 - `producer.id` is non-empty
 - `content.mime_type` is non-empty
-- payload contains at least one primary content field like `text`, `url`, or `blob_ref`
-
----
+- payload contains at least one primary content field such as `text`, `url`, or `blob_ref`
 
 ## Producer responsibilities
 
 A producer should:
-- create the event payload
+- create the payload
 - assign `captured_at`
-- provide a stable `producer.id`
-- provide `client_event_id` if possible
-- append the payload once
+- provide stable `producer.id`
+- provide `client_event_id` when possible
+- append once
 
 A producer should not:
 - read previous notes
 - regenerate `notes.txt`
 - inspect canonical journal state
-- know what backend is being used
-
----
+- know what backend is in use
 
 ## Committer responsibilities
 
-The committer will:
-- validate the capture payload
+The committer should:
+- validate payloads
 - add `received_at`
 - assign canonical `event_id`
 - normalize structure if needed
 - dedupe using `producer.id + client_event_id` when available
-- append committed event to the journal
+- append committed events to the journal
 - route invalid payloads to rejects
-
-That separation keeps capture clients simple and durable.
