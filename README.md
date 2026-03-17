@@ -137,7 +137,6 @@ By default, setup uses Dropbox if available:
 ├── ingress/
 │   ├── dropbox/
 │   └── local/
-├── legacy/
 └── notes.txt
 ```
 
@@ -152,7 +151,6 @@ If Dropbox is not available, setup falls back to:
 - `entries/` → current canonical immutable note files
 - `ingress/` → transport-specific staging area for append-only producers
 - `notes.txt` → generated readable timeline
-- `legacy/` → archived pre-entry notes if setup finds an older `notes.txt`
 
 ## Mac usage
 
@@ -162,7 +160,7 @@ After setup:
 - type your note
 - press `Command + Enter`
 
-The Mac helper writes a canonical entry file and regenerates `notes.txt`.
+The Mac helper writes a raw capture file into `ingress/local/`, then the importer commits it into `entries/` and regenerates `notes.txt`.
 
 ## iPhone / iPad usage
 
@@ -204,11 +202,11 @@ This keeps the architecture open for:
 
 The current working contract is intentionally tiny:
 
-### Desktop direct-write contract
-A client may write one plain text file per note into:
+### Mac capture contract
+The Mac helper drops one raw plain text file per note into:
 
 ```txt
-entries/YYYY/MM/DD/
+ingress/local/
 ```
 
 ### Mobile contract

@@ -14,6 +14,8 @@ QUICKNOTE = REPO_ROOT / "quicknote.swift"
 SETUP = REPO_ROOT / "setup.sh"
 IOS_README = REPO_ROOT / "mobile" / "ios" / "README.md"
 README = REPO_ROOT / "README.md"
+CONTRIBUTING = REPO_ROOT / "CONTRIBUTING.md"
+ARCHITECTURE_V2 = REPO_ROOT / "docs" / "architecture-v2.md"
 
 
 class NotesCaptureTestCase(unittest.TestCase):
@@ -37,7 +39,6 @@ class NotesCaptureTestCase(unittest.TestCase):
         (data_dir / "entries").mkdir(parents=True, exist_ok=True)
         (data_dir / "ingress" / "dropbox").mkdir(parents=True, exist_ok=True)
         (data_dir / "ingress" / "local").mkdir(parents=True, exist_ok=True)
-        (data_dir / "legacy").mkdir(parents=True, exist_ok=True)
         return data_dir
 
     def test_materialize_notes_creates_timeline_from_entries(self):
@@ -153,59 +154,16 @@ class NotesCaptureTestCase(unittest.TestCase):
             self.assertFalse(empty_file.exists())
             self.assertTrue((ingress / "archive" / "blank.txt.empty").exists())
 
-    def test_import_legacy_notes_creates_entries_archive_and_materialized_notes(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            data_dir = self.make_data_dir(tmp_path)
-            legacy_file = tmp_path / "notes.txt"
-            legacy_file.write_text(
-                "[2026-03-12 03:51:59]\n"
-                "hello world 3\n\n\n"
-                "[2026-03-12 03:54:51]\n"
-                "hello world 4\n",
-                encoding="utf-8",
-            )
+    def test_repo_removes_legacy_migration_script_and_storage_dir(self):
+        setup_source = SETUP.read_text(encoding="utf-8")
+        contributing = CONTRIBUTING.read_text(encoding="utf-8")
+        readme = README.read_text(encoding="utf-8")
 
-            result = self.run_cmd("python3", str(IMPORT_LEGACY), str(legacy_file), str(data_dir))
-            self.assertIn("Imported 2 entries", result.stdout)
-
-            imported_entries = sorted((data_dir / "entries").rglob("*.txt"))
-            self.assertEqual(len(imported_entries), 2)
-            self.assertEqual(
-                [path.name for path in imported_entries],
-                [
-                    "2026-03-12_03-51-59--legacy-import--migrated-0001.txt",
-                    "2026-03-12_03-54-51--legacy-import--migrated-0002.txt",
-                ],
-            )
-            self.assertTrue((data_dir / "legacy" / "notes-imported-source.txt").exists())
-
-            notes = (data_dir / "notes.txt").read_text(encoding="utf-8")
-            self.assertEqual(
-                notes,
-                "[2026-03-12 03:51:59]\n"
-                "hello world 3\n\n"
-                "[2026-03-12 03:54:51]\n"
-                "hello world 4\n\n",
-            )
-
-    def test_import_legacy_notes_is_idempotent_for_existing_targets(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            data_dir = self.make_data_dir(tmp_path)
-            legacy_file = tmp_path / "notes.txt"
-            legacy_file.write_text(
-                "[2026-03-12 03:51:59]\n"
-                "hello world 3\n",
-                encoding="utf-8",
-            )
-
-            self.run_cmd("python3", str(IMPORT_LEGACY), str(legacy_file), str(data_dir))
-            second = self.run_cmd("python3", str(IMPORT_LEGACY), str(legacy_file), str(data_dir))
-
-            imported_entries = sorted((data_dir / "entries").rglob("*.txt"))
-            self.assertEqual(len(imported_entries), 1)
-            self.assertIn("Imported 0 entries", second.stdout)
+        self.assertFalse(IMPORT_LEGACY.exists())
+        self.assertNotIn('"$DATA_DIR/legacy"', setup_source)
+        self.assertNotIn('archive_legacy_notes_if_needed', setup_source)
+        self.assertNotIn('import_legacy_notes.py', contributing)
+        self.assertNotIn('legacy/', readme)
 
     def test_quicknote_source_targets_local_ingress_not_entries(self):
         source = QUICKNOTE.read_text(encoding="utf-8")
@@ -214,10 +172,11 @@ class NotesCaptureTestCase(unittest.TestCase):
         self.assertNotIn('try materializeNotes()', source)
         self.assertNotIn('appendingPathComponent("entries", isDirectory: true)', source)
 
-    def test_setup_and_docs_remove_legacy_inbox_references(self):
+    def test_setup_and_docs_reflect_ingress_only_current_state(self):
         setup_source = SETUP.read_text(encoding="utf-8")
         ios_readme = IOS_README.read_text(encoding="utf-8")
         readme = README.read_text(encoding="utf-8")
+        architecture = ARCHITECTURE_V2.read_text(encoding="utf-8")
 
         self.assertIn('/${dropbox_relative}/ingress/dropbox', setup_source)
         self.assertNotIn('/${dropbox_relative}/inbox', setup_source)
@@ -227,8 +186,18 @@ class NotesCaptureTestCase(unittest.TestCase):
 
         self.assertIn('ingress/dropbox/', ios_readme)
         self.assertNotIn('inbox/', ios_readme)
+
         self.assertIn('ingress/dropbox/', readme)
-        self.assertNotIn('inbox/', readme)
+        self.assertIn('ingress/local/', readme)
+        self.assertNotIn('legacy/', readme)
+        self.assertNotIn('Desktop direct-write contract', readme)
+        self.assertNotIn('write one plain text file per note into:\n\n```txt\nentries/YYYY/MM/DD/', readme)
+        self.assertNotIn('The Mac helper writes a canonical entry file and regenerates `notes.txt`.', readme)
+
+        self.assertIn('all producers write raw capture requests into `ingress/`', architecture)
+        self.assertIn('have the Mac helper append a raw capture request into `ingress/local/`', architecture)
+        self.assertNotIn('phone writes plain text files into `inbox/`', architecture)
+        self.assertNotIn('Mac helper writes canonical text files into `entries/`', architecture)
 
     @unittest.skipUnless(shutil.which("swiftc"), "swiftc not available")
     def test_quicknote_swift_typechecks(self):

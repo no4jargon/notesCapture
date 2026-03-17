@@ -22,16 +22,14 @@ Every PR should preserve or explicitly update tests around these steps:
 - ingestion from raw inputs
 - canonical append behavior
 - materialization into `notes.txt`
-- migration/import behavior
 - any producer-specific behavior that can be tested safely
 
 ## Current automated coverage
 
 `./tests/run_all.sh` currently verifies:
-- bash syntax for setup/import scripts
+- bash syntax for setup scripts
 - `materialize_notes.sh`
 - `process_inbox.sh`
-- `import_legacy_notes.py`
 - `quicknote.swift` typechecking when `swiftc` is available
 
 ## Merge policy
