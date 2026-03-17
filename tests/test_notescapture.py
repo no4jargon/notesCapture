@@ -35,7 +35,6 @@ class NotesCaptureTestCase(unittest.TestCase):
     def make_data_dir(self, root: Path) -> Path:
         data_dir = root / "data"
         (data_dir / "entries").mkdir(parents=True, exist_ok=True)
-        (data_dir / "inbox").mkdir(parents=True, exist_ok=True)
         (data_dir / "ingress" / "dropbox").mkdir(parents=True, exist_ok=True)
         (data_dir / "ingress" / "local").mkdir(parents=True, exist_ok=True)
         (data_dir / "legacy").mkdir(parents=True, exist_ok=True)
@@ -79,40 +78,22 @@ class NotesCaptureTestCase(unittest.TestCase):
             self.assertTrue(notes_file.exists())
             self.assertEqual(notes_file.read_text(encoding="utf-8"), "")
 
-    def test_process_inbox_imports_legacy_inbox_files_archives_originals_and_updates_notes(self):
+    def test_process_inbox_does_not_use_removed_legacy_inbox_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = self.make_data_dir(Path(tmp))
             inbox = data_dir / "inbox"
+            inbox.mkdir(parents=True, exist_ok=True)
 
             txt_file = inbox / "iphone-note.txt"
-            md_file = inbox / "android-note.md"
-            txt_file.write_text("Hello from iPhone\nsecond line\n", encoding="utf-8")
-            md_file.write_text("Hello from Android\n", encoding="utf-8")
-
+            txt_file.write_text("Hello from removed legacy inbox\n", encoding="utf-8")
             self.run_cmd("touch", "-t", "202603131724.25", str(txt_file))
-            self.run_cmd("touch", "-t", "202603131725.30", str(md_file))
 
             self.run_cmd("bash", str(PROCESS_INBOX), str(data_dir))
 
             imported_entries = sorted((data_dir / "entries").rglob("*.txt"))
-            self.assertEqual(len(imported_entries), 2)
-            self.assertTrue(
-                any(path.name.startswith("2026-03-13_17-24-25--mobile-capture--dropbox-inbox--") for path in imported_entries)
-            )
-            self.assertTrue(
-                any(path.name.startswith("2026-03-13_17-25-30--mobile-capture--dropbox-inbox--") for path in imported_entries)
-            )
-
-            archived = sorted((inbox / "archive").iterdir())
-            archived_names = [path.name for path in archived]
-            self.assertEqual(
-                archived_names,
-                ["android-note.md.imported", "iphone-note.txt.imported"],
-            )
-
-            notes = (data_dir / "notes.txt").read_text(encoding="utf-8")
-            self.assertIn("[2026-03-13 17:24:25]\nHello from iPhone\nsecond line\n", notes)
-            self.assertIn("[2026-03-13 17:25:30]\nHello from Android\n", notes)
+            self.assertEqual(imported_entries, [])
+            self.assertTrue(txt_file.exists())
+            self.assertFalse((inbox / "archive").exists())
 
     def test_process_inbox_imports_dropbox_ingress_files_without_using_legacy_inbox(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -158,11 +139,11 @@ class NotesCaptureTestCase(unittest.TestCase):
             notes = (data_dir / "notes.txt").read_text(encoding="utf-8")
             self.assertEqual(notes, "[2026-03-13 17:30:10]\nHello from Mac ingress\n\n")
 
-    def test_process_inbox_moves_empty_files_to_archive_without_entry(self):
+    def test_process_inbox_moves_empty_dropbox_ingress_files_to_archive_without_entry(self):
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = self.make_data_dir(Path(tmp))
-            inbox = data_dir / "inbox"
-            empty_file = inbox / "blank.txt"
+            ingress = data_dir / "ingress" / "dropbox"
+            empty_file = ingress / "blank.txt"
             empty_file.write_text("  \n\n\t", encoding="utf-8")
 
             self.run_cmd("bash", str(PROCESS_INBOX), str(data_dir))
@@ -170,7 +151,7 @@ class NotesCaptureTestCase(unittest.TestCase):
             imported_entries = list((data_dir / "entries").rglob("*.txt"))
             self.assertEqual(imported_entries, [])
             self.assertFalse(empty_file.exists())
-            self.assertTrue((inbox / "archive" / "blank.txt.empty").exists())
+            self.assertTrue((ingress / "archive" / "blank.txt.empty").exists())
 
     def test_import_legacy_notes_creates_entries_archive_and_materialized_notes(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -233,21 +214,21 @@ class NotesCaptureTestCase(unittest.TestCase):
         self.assertNotIn('try materializeNotes()', source)
         self.assertNotIn('appendingPathComponent("entries", isDirectory: true)', source)
 
-    def test_setup_and_docs_prefer_dropbox_ingress_over_legacy_inbox(self):
+    def test_setup_and_docs_remove_legacy_inbox_references(self):
         setup_source = SETUP.read_text(encoding="utf-8")
         ios_readme = IOS_README.read_text(encoding="utf-8")
         readme = README.read_text(encoding="utf-8")
 
         self.assertIn('/${dropbox_relative}/ingress/dropbox', setup_source)
         self.assertNotIn('/${dropbox_relative}/inbox', setup_source)
-        self.assertIn('phone writes plain text files into ingress/dropbox/', setup_source)
+        self.assertNotIn('phone writes plain text files into inbox/', setup_source)
+        self.assertNotIn('Mobile inbox:', setup_source)
+        self.assertNotIn('inbox/', setup_source)
 
         self.assertIn('ingress/dropbox/', ios_readme)
-        self.assertIn('inbox/', ios_readme)
-        self.assertIn('legacy', ios_readme.lower())
-
+        self.assertNotIn('inbox/', ios_readme)
         self.assertIn('ingress/dropbox/', readme)
-        self.assertIn('legacy', readme.lower())
+        self.assertNotIn('inbox/', readme)
 
     @unittest.skipUnless(shutil.which("swiftc"), "swiftc not available")
     def test_quicknote_swift_typechecks(self):

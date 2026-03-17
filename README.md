@@ -56,8 +56,7 @@ That makes it easier to support Mac, iPhone, Dropbox, and later Windows, Android
 
 There is also a transitional raw-ingress layer:
 - `ingress/local/` is the active Mac producer path
-- `ingress/dropbox/` is the preferred mobile producer path
-- `inbox/` is still supported as a deprecated legacy mobile drop location
+- `ingress/dropbox/` is the active mobile producer path
 - the Mac importer converts raw submissions into canonical entries
 - `notes.txt` is then regenerated automatically
 
@@ -138,7 +137,6 @@ By default, setup uses Dropbox if available:
 ├── ingress/
 │   ├── dropbox/
 │   └── local/
-├── inbox/
 ├── legacy/
 └── notes.txt
 ```
@@ -153,7 +151,6 @@ If Dropbox is not available, setup falls back to:
 
 - `entries/` → current canonical immutable note files
 - `ingress/` → transport-specific staging area for append-only producers
-- `inbox/` → deprecated legacy mobile drop path kept for backward compatibility
 - `notes.txt` → generated readable timeline
 - `legacy/` → archived pre-entry notes if setup finds an older `notes.txt`
 
@@ -190,9 +187,6 @@ Basic model:
 - your Mac automatically imports it into `entries/`
 - `notes.txt` updates with the same timeline as laptop notes
 
-Legacy note:
-- older setups that still write to `inbox/` continue to work for now, but that path is deprecated
-
 ## Why Dropbox first
 
 Dropbox is a good starting point because it is:
@@ -217,18 +211,11 @@ A client may write one plain text file per note into:
 entries/YYYY/MM/DD/
 ```
 
-### Preferred mobile contract
+### Mobile contract
 A client should drop one plain text file per note into:
 
 ```txt
 ingress/dropbox/
-```
-
-### Legacy mobile compatibility contract
-Older clients may still drop one plain text file per note into:
-
-```txt
-inbox/
 ```
 
 As long as a client can create a text file in the shared folder, it can participate in the current transitional system.

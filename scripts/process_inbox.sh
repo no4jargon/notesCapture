@@ -19,12 +19,11 @@ fi
 
 ENTRIES_DIR="$DATA_DIR/entries"
 INGRESS_DIR="$DATA_DIR/ingress"
-LEGACY_INBOX_DIR="$DATA_DIR/inbox"
 DROPBOX_INGRESS_DIR="$INGRESS_DIR/dropbox"
 LOCAL_INGRESS_DIR="$INGRESS_DIR/local"
 TMP_LIST="$DATA_DIR/.notesCapture-inbox-list.tmp"
 
-mkdir -p "$ENTRIES_DIR" "$LEGACY_INBOX_DIR" "$DROPBOX_INGRESS_DIR" "$LOCAL_INGRESS_DIR"
+mkdir -p "$ENTRIES_DIR" "$DROPBOX_INGRESS_DIR" "$LOCAL_INGRESS_DIR"
 
 imported_any=0
 
@@ -63,7 +62,6 @@ import_from_source_dir() {
   done < "$TMP_LIST"
 }
 
-import_from_source_dir "$LEGACY_INBOX_DIR" "mobile-capture" "dropbox-inbox"
 import_from_source_dir "$DROPBOX_INGRESS_DIR" "mobile-capture" "dropbox-ingress"
 import_from_source_dir "$LOCAL_INGRESS_DIR" "mac-hotkey" "local-ingress"
 
