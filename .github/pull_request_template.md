@@ -8,16 +8,16 @@
   - ingress
   - committer
   - journal
-  - view/materializer
-  - agent/read-model
-- does this increase or reduce coupling?
+  - view / materializer
+  - agent / read-model
+- did this increase or reduce coupling?
 
 ## Test plan
 - [ ] `./tests/run_all.sh`
-- [ ] manually tested any user-facing macOS behavior if relevant
+- [ ] manually tested user-facing macOS behavior if relevant
 - [ ] no producer was given unnecessary read access
 - [ ] no change made `notes.txt` canonical
 
 ## Notes
-- migration concerns:
 - follow-up work:
+- rollout or migration concerns:
