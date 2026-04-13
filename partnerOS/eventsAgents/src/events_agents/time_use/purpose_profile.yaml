@@ -1,0 +1,14 @@
+purpose_id: time_use
+eligible_event_types:
+  - note.capture
+excluded_event_types: []
+candidate_ingest_window_days: 14
+default_timezone: Asia/Kolkata
+week_start: monday
+default_resolution_minutes: 15
+merge_threshold_minutes: 30
+bridge_threshold_minutes: 60
+privacy_max: manual_note_only
+supported_modalities:
+  - text/plain
+  - text/markdown

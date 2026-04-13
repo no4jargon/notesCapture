@@ -7,3 +7,4 @@ config/generated.lua
 mobile/ios/SHORTCUT_SETUP.txt
 __pycache__/
 *.pyc
+.env.local
