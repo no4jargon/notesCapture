@@ -1,0 +1,20 @@
+eventsCapture iPhone / iPad Dropbox setup
+
+1. Install the Dropbox app and Apple Shortcuts.
+2. Create a Shortcut named eventsCapture.
+3. Add these actions:
+   - Ask for Input (Text, prompt: Quick note)
+   - Current Date
+   - Format Date -> Custom -> yyyy-MM-dd_HH-mm-ss
+   - Text -> use the note text from Ask for Input
+   - Save File to Dropbox
+4. Save the file into this Dropbox folder:
+   /notesCapture-data/ingress/dropbox
+5. Recommended file name:
+   [Formatted Date]-iphone.txt
+6. On your Mac, eventsCapture will automatically commit those ingress files into:
+   /Users/anujshah/Library/CloudStorage/Dropbox/notesCapture-data/journal
+7. Your generated notes view stays here:
+   /Users/anujshah/Library/CloudStorage/Dropbox/notesCapture-data/views/notes.txt
+
+Any future client can do the same thing by dropping plain text files into the ingress/dropbox folder.
